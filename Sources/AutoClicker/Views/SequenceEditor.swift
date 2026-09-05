@@ -4,79 +4,102 @@ struct SequenceEditor: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("SLIDES")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                SectionLabel("SLIDES")
                 Spacer()
-                Button("+ Add") {
+                Button {
                     model.addSlide()
+                } label: {
+                    Label("추가", systemImage: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color(red: 15 / 255, green: 118 / 255, blue: 110 / 255))
                 .disabled(!model.canEdit)
+                .opacity(model.canEdit ? 1 : 0.45)
             }
 
             VStack(spacing: 0) {
                 ForEach(Array(model.slides.enumerated()), id: \.element.id) { index, slide in
-                    HStack(spacing: 12) {
-                        Text(String(format: "%02d", index + 1))
-                            .font(.system(size: 13, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28, alignment: .leading)
-
-                        Text("Slide")
-                            .font(.system(size: 13))
-
-                        Spacer()
-
-                        HStack(spacing: 8) {
-                            Button("-") {
-                                model.updateSeconds(id: slide.id, seconds: slide.seconds - 1)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!model.canEdit || slide.seconds <= 1)
-
-                            Text("\(slide.seconds)s")
-                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                                .frame(minWidth: 36)
-
-                            Button("+") {
-                                model.updateSeconds(id: slide.id, seconds: slide.seconds + 1)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!model.canEdit || slide.seconds >= 999)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        Button {
-                            model.removeSlide(slide.id)
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!model.canEdit || model.slides.count <= 1)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    slideRow(index: index, slide: slide)
 
                     if index < model.slides.count - 1 {
-                        Divider().padding(.leading, 14)
+                        Rectangle()
+                            .fill(Theme.hairline)
+                            .frame(height: 1)
+                            .padding(.leading, 16)
                     }
                 }
             }
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            )
+            .glassSurface(cornerRadius: 20)
         }
+    }
+
+    private func slideRow(index: Int, slide: SlideItem) -> some View {
+        HStack(spacing: 12) {
+            Text(String(format: "%02d", index + 1))
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(Theme.inkMuted)
+                .frame(width: 26, alignment: .leading)
+
+            Text("Slide")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.ink)
+
+            Spacer()
+
+            stepper(slide: slide)
+
+            Button {
+                model.removeSlide(slide.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.inkMuted)
+            }
+            .buttonStyle(.plain)
+            .disabled(!model.canEdit || model.slides.count <= 1)
+            .opacity(model.canEdit && model.slides.count > 1 ? 1 : 0.35)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+    }
+
+    private func stepper(slide: SlideItem) -> some View {
+        HStack(spacing: 4) {
+            stepButton("minus", enabled: model.canEdit && slide.seconds > 1) {
+                model.updateSeconds(id: slide.id, seconds: slide.seconds - 1)
+            }
+
+            Text("\(slide.seconds)s")
+                .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(Theme.ink)
+                .frame(minWidth: 38)
+
+            stepButton("plus", enabled: model.canEdit && slide.seconds < 999) {
+                model.updateSeconds(id: slide.id, seconds: slide.seconds + 1)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassSurface(cornerRadius: 13)
+    }
+
+    private func stepButton(
+        _ symbol: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(enabled ? Theme.accent : Theme.inkMuted)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
     }
 }

@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 @MainActor
@@ -12,7 +11,6 @@ final class GlassHUDPanelController: NSObject {
 
     private var panel: NSPanel?
     private var hosting: NSHostingView<GlassHUDView>?
-    private var cancellables = Set<AnyCancellable>()
 
     /// Panel origin and pointer location captured when a press begins.
     private var dragAnchor: (origin: CGPoint, mouse: CGPoint)?
@@ -22,13 +20,6 @@ final class GlassHUDPanelController: NSObject {
 
     func attach(sequencer: SequencerService) {
         self.sequencer = sequencer
-        cancellables.removeAll()
-        sequencer.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.refreshSize()
-            }
-            .store(in: &cancellables)
     }
 
     func show() {
@@ -39,7 +30,6 @@ final class GlassHUDPanelController: NSObject {
         updateContent()
         positionIfNeeded()
         panel?.orderFrontRegardless()
-        refreshSize()
     }
 
     func hide() {
@@ -65,37 +55,16 @@ final class GlassHUDPanelController: NSObject {
             hosting.rootView = view
         } else {
             let host = NSHostingView(rootView: view)
-            host.frame = NSRect(x: 0, y: 0, width: 160, height: 80)
+            host.frame = NSRect(origin: .zero, size: HUDMetrics.panelSize)
             panel.contentView = host
             hosting = host
-        }
-        refreshSize()
-    }
-
-    private func refreshSize() {
-        guard let panel, let hosting else { return }
-        hosting.invalidateIntrinsicContentSize()
-        let size = hosting.fittingSize
-        guard size.width > 1, size.height > 1 else { return }
-        var frame = panel.frame
-        let oldSize = frame.size
-        guard oldSize != size else { return }
-        frame.size = size
-        // Keep bottom-right corner stable when expanding (pause controls).
-        frame.origin.x += oldSize.width - size.width
-        frame.origin.y += oldSize.height - size.height
-        frame.origin = clampedOrigin(frame.origin, size: size)
-        panel.setFrame(frame, display: true)
-        hosting.frame = NSRect(origin: .zero, size: size)
-        // A resize re-anchors an in-flight drag so the HUD keeps following the pointer.
-        if dragAnchor != nil {
-            dragAnchor = (frame.origin, NSEvent.mouseLocation)
         }
     }
 
     private func makePanel(sequencer: SequencerService) -> NSPanel {
+        // Every HUD state shares one card size, so the panel frame never changes.
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 160, height: 80),
+            contentRect: NSRect(origin: .zero, size: HUDMetrics.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -116,7 +85,7 @@ final class GlassHUDPanelController: NSObject {
         panel.animationBehavior = .utilityWindow
 
         let host = NSHostingView(rootView: makeHUDView(sequencer: sequencer))
-        host.frame = panel.contentView?.bounds ?? .zero
+        host.frame = NSRect(origin: .zero, size: HUDMetrics.panelSize)
         panel.contentView = host
         hosting = host
 
@@ -125,7 +94,7 @@ final class GlassHUDPanelController: NSObject {
 
     private func positionIfNeeded() {
         guard let panel else { return }
-        let size = panel.frame.size
+        let size = HUDMetrics.panelSize
         if let saved = PersistenceService.loadHUDOrigin() {
             // A saved spot can land off-screen after a display change.
             panel.setFrameOrigin(clampedOrigin(saved, size: size))
@@ -133,11 +102,9 @@ final class GlassHUDPanelController: NSObject {
         }
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let origin = CGPoint(
-            x: visible.maxX - size.width - 24,
-            y: visible.minY + 24
+        panel.setFrameOrigin(
+            CGPoint(x: visible.maxX - size.width - 24, y: visible.minY + 24)
         )
-        panel.setFrameOrigin(origin)
     }
 
     // MARK: - Dragging

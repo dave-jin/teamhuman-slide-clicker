@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// One footprint for every HUD state.
+///
+/// Play, countdown and paused used to size themselves to their own content,
+/// so the HUD jumped and resized mid-talk. They now share a single card and
+/// only the contents change, which also lets the panel keep a constant frame.
+enum HUDMetrics {
+    static let cardSize = CGSize(width: 248, height: 132)
+    static let cornerRadius: CGFloat = 30
+    /// Breathing room inside the panel for the drop shadow.
+    static let shadowInset: CGFloat = 10
+
+    static var panelSize: CGSize {
+        CGSize(
+            width: cardSize.width + shadowInset * 2,
+            height: cardSize.height + shadowInset * 2
+        )
+    }
+}
+
 struct GlassHUDView: View {
     @ObservedObject var sequencer: SequencerService
     var onPlay: () -> Void
@@ -12,31 +31,48 @@ struct GlassHUDView: View {
     /// in which case the press must not be treated as a click.
     var onDragEnded: () -> Bool
 
-    private let accent = Color(red: 15 / 255, green: 118 / 255, blue: 110 / 255)
+    private let controlRowHeight: CGFloat = 34
 
     var body: some View {
-        Group {
-            switch sequencer.phase {
-            case .armed:
-                armedView
-            case .running:
-                runningView
-            case .paused:
-                pausedView
-            case .idle, .finished:
-                EmptyView()
-            }
+        card
+            .frame(width: HUDMetrics.cardSize.width, height: HUDMetrics.cardSize.height)
+            .glassSurface(
+                cornerRadius: HUDMetrics.cornerRadius,
+                tint: sequencer.phase == .armed ? Theme.accent : nil
+            )
+            .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 6)
+            .padding(HUDMetrics.shadowInset)
+            .contentShape(Rectangle())
+            .gesture(pressGesture(action: primaryAction))
+    }
+
+    @ViewBuilder
+    private var card: some View {
+        switch sequencer.phase {
+        case .armed:
+            armedCard
+        case .running:
+            runningCard
+        case .paused:
+            pausedCard
+        case .idle, .finished:
+            Color.clear
         }
-        .padding(8)
-        .contentShape(Rectangle())
-        // Bare background: drag only, no click action.
-        .gesture(dragGesture())
+    }
+
+    /// Clicking the card body does the obvious thing for the current state.
+    private var primaryAction: (() -> Void)? {
+        switch sequencer.phase {
+        case .armed: return onPlay
+        case .running: return onPause
+        case .paused, .idle, .finished: return nil
+        }
     }
 
     // MARK: - Click vs. drag
 
-    /// A press that moves the HUD is a drag; a press that stays put is a click.
-    private func dragGesture(action: (() -> Void)? = nil) -> some Gesture {
+    /// A press that stays put is a click; a press that travels moves the HUD.
+    private func pressGesture(action: (() -> Void)?) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { _ in onDragChanged() }
             .onEnded { _ in
@@ -45,132 +81,137 @@ struct GlassHUDView: View {
             }
     }
 
+    /// Same internal margins in every state, so only the contents differ.
+    private func cardShell<Top: View, Bottom: View>(
+        @ViewBuilder top: () -> Top,
+        @ViewBuilder bottom: () -> Bottom
+    ) -> some View {
+        VStack(spacing: 4) {
+            top()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            bottom()
+                .frame(height: controlRowHeight)
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .padding(.horizontal, 14)
+    }
+
     // MARK: - Armed (waiting for Play)
 
-    private var armedView: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "play.fill")
-                .font(.system(size: 18, weight: .semibold))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Play")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Text(sequencer.progressLabel + " · " + sequencer.timeLabel)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .opacity(0.7)
+    private var armedCard: some View {
+        cardShell {
+            HStack(spacing: 14) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 32, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Play")
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    Text(sequencer.progressLabel + " · " + sequencer.timeLabel)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .opacity(0.85)
+                }
             }
+        } bottom: {
+            Text("클릭하면 카운트다운 시작")
+                .font(.system(size: 11, weight: .medium))
+                .opacity(0.8)
         }
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background {
-            Capsule(style: .continuous)
-                .fill(accent)
-            Capsule(style: .continuous)
-                .strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 6)
-        .contentShape(Capsule(style: .continuous))
-        .gesture(dragGesture(action: onPlay))
-        .help("눌러서 카운트다운 시작 · 드래그로 이동")
+        .foregroundStyle(Theme.onAccent)
+        .help("클릭: 카운트다운 시작 · 드래그: 위치 이동")
     }
 
     // MARK: - Running
 
-    private var runningView: some View {
-        let urgent = sequencer.isUrgent
-        return VStack(spacing: 2) {
-            Text(sequencer.timeLabel)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(urgent
-                    ? Color(red: 220 / 255, green: 38 / 255, blue: 38 / 255)
-                    : Color(red: 11 / 255, green: 13 / 255, blue: 18 / 255).opacity(0.9))
-                .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
+    private var runningCard: some View {
+        cardShell {
+            readout(accessory: nil)
+        } bottom: {
+            progressBar
+        }
+        .help("클릭: 일시정지 · 드래그: 위치 이동")
+    }
 
-            Text(sequencer.progressLabel)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.45))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background {
-            ZStack {
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                Capsule(style: .continuous)
-                    .fill(urgent
-                        ? Color(red: 1, green: 0.92, blue: 0.92).opacity(0.35)
-                        : Color.white.opacity(0.18))
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.white.opacity(urgent ? 0.65 : 0.55), lineWidth: 1)
+    private var progressBar: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Theme.ink.opacity(0.12))
+                Capsule()
+                    .fill(sequencer.isUrgent ? Theme.urgent : Theme.accent)
+                    .frame(width: max(0, width * sequencer.slideProgress))
             }
+            .frame(height: 5)
+            .frame(maxHeight: .infinity)
+            .animation(.linear(duration: 0.25), value: sequencer.slideProgress)
         }
-        .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 6)
-        .scaleEffect(urgent ? 1.03 : 1.0)
-        .animation(
-            urgent
-                ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
-                : .default,
-            value: urgent
-        )
-        .contentShape(Capsule(style: .continuous))
-        .gesture(dragGesture(action: onPause))
-        .help("클릭: 일시정지 · 드래그: 이동")
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Paused
 
-    private var pausedView: some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(sequencer.timeLabel)
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                    Text("‖")
-                        .font(.system(size: 14, weight: .semibold))
-                        .opacity(0.45)
-                }
-                Text(sequencer.progressLabel)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary.opacity(0.4))
-            }
-
+    private var pausedCard: some View {
+        cardShell {
+            readout(accessory: "pause.fill")
+        } bottom: {
             HStack(spacing: 8) {
-                Label("재개", systemImage: "play.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(accent)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .contentShape(Capsule())
-                    .gesture(dragGesture(action: onResume))
+                pausedButton("재개", icon: "play.fill", tint: Theme.accent, action: onResume)
+                pausedButton("정지", icon: "stop.fill", tint: nil, action: onStop)
+            }
+        }
+        .help("재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동")
+    }
 
-                Label("정지", systemImage: "stop.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.primary.opacity(0.12))
-                    .foregroundStyle(.primary.opacity(0.85))
-                    .clipShape(Capsule())
-                    .contentShape(Capsule())
-                    .gesture(dragGesture(action: onStop))
+    private func pausedButton(
+        _ title: String,
+        icon: String,
+        tint: Color?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Label(title, systemImage: icon)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .glassSurface(cornerRadius: 15, tint: tint, interactive: true)
+            .contentShape(Capsule())
+            .gesture(pressGesture(action: action))
+    }
+
+    // MARK: - Shared readout
+
+    /// Countdown and slide position, identical in running and paused states so
+    /// nothing shifts when the talk is paused.
+    private func readout(accessory: String?) -> some View {
+        VStack(spacing: 1) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(sequencer.timeLabel)
+                    .font(.system(size: 44, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(sequencer.isUrgent ? Theme.urgent : Theme.ink)
+                    .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
+
+                if let accessory {
+                    Image(systemName: accessory)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.inkMuted)
+                }
             }
+
+            Text(sequencer.progressLabel)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.inkMuted)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.white.opacity(0.12))
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.45), lineWidth: 1)
-            }
-        }
-        .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 6)
-        .help("재개 또는 정지(메뉴로) · 드래그로 이동")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .scaleEffect(sequencer.isUrgent ? 1.03 : 1.0)
+        .animation(
+            sequencer.isUrgent
+                ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
+                : .default,
+            value: sequencer.isUrgent
+        )
     }
 }

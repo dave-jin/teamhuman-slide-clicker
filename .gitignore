@@ -4,3 +4,6 @@ dist/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 DerivedData/
+
+# Pasted reference screenshots, local only
+images/

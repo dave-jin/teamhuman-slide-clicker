@@ -16,6 +16,8 @@ final class SequencerService: ObservableObject {
     @Published private(set) var remainingSeconds: Int = 0
     @Published private(set) var totalSlides: Int = 0
     @Published private(set) var isUrgent: Bool = false
+    /// Full length of the slide now on screen — the denominator for the HUD progress bar.
+    @Published private(set) var currentSlideSeconds: Int = 0
 
     var advanceKey: AdvanceKey = .space
     private var timings: [Int] = []
@@ -45,6 +47,13 @@ final class SequencerService: ObservableObject {
         TimeFormat.remaining(max(0, remainingSeconds))
     }
 
+    /// How much of the current slide has already elapsed, 0...1.
+    var slideProgress: Double {
+        guard currentSlideSeconds > 0 else { return 0 }
+        let elapsed = Double(currentSlideSeconds - max(0, remainingSeconds))
+        return min(1, max(0, elapsed / Double(currentSlideSeconds)))
+    }
+
     /// Prepare timings and wait for Play — countdown does not start yet.
     func arm(timings: [Int], key: AdvanceKey) {
         guard !timings.isEmpty else { return }
@@ -54,6 +63,7 @@ final class SequencerService: ObservableObject {
         self.totalSlides = timings.count
         self.currentIndex = 0
         self.remainingSeconds = timings[0]
+        self.currentSlideSeconds = timings[0]
         self.phase = .armed
         self.isUrgent = false
     }
@@ -102,6 +112,7 @@ final class SequencerService: ObservableObject {
         phase = .idle
         currentIndex = 0
         remainingSeconds = 0
+        currentSlideSeconds = 0
         totalSlides = 0
         isUrgent = false
         timings = []
@@ -112,6 +123,7 @@ final class SequencerService: ObservableObject {
             if remainingSeconds <= 0 {
                 remainingSeconds = timings[currentIndex]
             }
+            currentSlideSeconds = timings[currentIndex]
             isUrgent = remainingSeconds <= 3
 
             while remainingSeconds > 0 {
@@ -140,6 +152,7 @@ final class SequencerService: ObservableObject {
                 KeystrokeService.send(advanceKey)
                 currentIndex += 1
                 remainingSeconds = timings[currentIndex]
+                currentSlideSeconds = timings[currentIndex]
             } else {
                 phase = .finished
                 remainingSeconds = 0
