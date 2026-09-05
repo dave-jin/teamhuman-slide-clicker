@@ -3,6 +3,8 @@ import SwiftUI
 struct SequenceEditor: View {
     @ObservedObject var model: AppModel
 
+    private var lang: AppLanguage { model.language }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -11,7 +13,7 @@ struct SequenceEditor: View {
                 Button {
                     model.addSlide()
                 } label: {
-                    Label("추가", systemImage: "plus")
+                    Label(lang.pick("추가", "Add"), systemImage: "plus")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -43,7 +45,7 @@ struct SequenceEditor: View {
                 .foregroundStyle(Theme.inkMuted)
                 .frame(width: 26, alignment: .leading)
 
-            Text("Slide")
+            Text(lang.pick("슬라이드", "Slide"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.ink)
 

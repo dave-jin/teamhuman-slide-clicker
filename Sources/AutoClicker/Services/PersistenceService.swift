@@ -7,6 +7,7 @@ enum PersistenceService {
     private static let advanceKeyKey = "advanceKey"
     private static let hudOriginXKey = "hudOriginX"
     private static let hudOriginYKey = "hudOriginY"
+    private static let languageKey = "language"
     private static let profilesFileName = "profiles.json"
 
     static func loadTimings() -> [Int] {
@@ -31,6 +32,18 @@ enum PersistenceService {
 
     static func saveAdvanceKey(_ key: AdvanceKey) {
         UserDefaults.standard.set(key.rawValue, forKey: advanceKeyKey)
+    }
+
+    static func loadLanguage() -> AppLanguage {
+        if let raw = UserDefaults.standard.string(forKey: languageKey),
+           let language = AppLanguage(rawValue: raw) {
+            return language
+        }
+        return .systemDefault
+    }
+
+    static func saveLanguage(_ language: AppLanguage) {
+        UserDefaults.standard.set(language.rawValue, forKey: languageKey)
     }
 
     static func loadHUDOrigin() -> CGPoint? {

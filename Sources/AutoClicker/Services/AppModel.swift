@@ -7,6 +7,7 @@ import SwiftUI
 final class AppModel: ObservableObject {
     @Published var slides: [SlideItem]
     @Published var advanceKey: AdvanceKey
+    @Published var language: AppLanguage
     @Published var selectedPreset: TimingPreset? = .customExample
     @Published var profiles: [TimingProfile] = []
     @Published var profileNameDraft: String = ""
@@ -30,9 +31,11 @@ final class AppModel: ObservableObject {
         let timings = PersistenceService.loadTimings()
         slides = timings.map { SlideItem(seconds: $0) }
         advanceKey = PersistenceService.loadAdvanceKey()
+        language = PersistenceService.loadLanguage()
         profiles = PersistenceService.loadProfiles()
 
         hudController.attach(sequencer: sequencer)
+        hudController.language = language
         hudController.onPlay = { [weak self] in self?.play() }
         hudController.onPause = { [weak self] in self?.sequencer.pause() }
         hudController.onResume = { [weak self] in self?.sequencer.resume() }
@@ -83,6 +86,13 @@ final class AppModel: ObservableObject {
             slides[idx].seconds = max(1, min(999, seconds))
             persist()
         }
+    }
+
+    /// Language can change at any time — it does not touch a running session.
+    func setLanguage(_ language: AppLanguage) {
+        self.language = language
+        PersistenceService.saveLanguage(language)
+        hudController.language = language
     }
 
     func setAdvanceKey(_ key: AdvanceKey) {

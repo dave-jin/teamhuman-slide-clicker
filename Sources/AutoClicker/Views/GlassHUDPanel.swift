@@ -8,6 +8,8 @@ final class GlassHUDPanelController: NSObject {
     var onPause: (() -> Void)?
     var onResume: (() -> Void)?
     var onStop: (() -> Void)?
+    /// Set by `AppModel`; the HUD lives outside the SwiftUI environment chain.
+    var language: AppLanguage = .korean
 
     private var panel: NSPanel?
     private var hosting: NSHostingView<GlassHUDView>?
@@ -39,6 +41,7 @@ final class GlassHUDPanelController: NSObject {
     private func makeHUDView(sequencer: SequencerService) -> GlassHUDView {
         GlassHUDView(
             sequencer: sequencer,
+            language: language,
             onPlay: { [weak self] in self?.onPlay?() },
             onPause: { [weak self] in self?.onPause?() },
             onResume: { [weak self] in self?.onResume?() },

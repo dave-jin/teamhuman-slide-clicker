@@ -23,6 +23,7 @@ enum HUDMetrics {
 
 struct GlassHUDView: View {
     @ObservedObject var sequencer: SequencerService
+    var language: AppLanguage
     var onPlay: () -> Void
     var onPause: () -> Void
     var onResume: () -> Void
@@ -133,13 +134,18 @@ struct GlassHUDView: View {
                     .opacity(0.85)
             }
         } bottom: {
-            Text("클릭하면 시작")
+            Text(language.pick("클릭하면 시작", "Click to start"))
                 .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .opacity(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(Theme.onAccent)
-        .help("클릭: 카운트다운 시작 · 드래그: 위치 이동")
+        .help(language.pick(
+            "클릭: 카운트다운 시작 · 드래그: 위치 이동",
+            "Click to start the countdown · drag to move"
+        ))
     }
 
     // MARK: - Running
@@ -150,7 +156,10 @@ struct GlassHUDView: View {
         } bottom: {
             progressBar
         }
-        .help("클릭: 일시정지 · 드래그: 위치 이동")
+        .help(language.pick(
+            "클릭: 일시정지 · 드래그: 위치 이동",
+            "Click to pause · drag to move"
+        ))
     }
 
     private var progressBar: some View {
@@ -176,12 +185,25 @@ struct GlassHUDView: View {
             readout
         } bottom: {
             HStack(spacing: 6) {
-                pausedButton("재개", icon: "play.fill", tint: Theme.accent, action: onResume)
-                pausedButton("정지", icon: "stop.fill", tint: nil, action: onStop)
+                pausedButton(
+                    language.pick("재개", "Resume"),
+                    icon: "play.fill",
+                    tint: Theme.accent,
+                    action: onResume
+                )
+                pausedButton(
+                    language.pick("정지", "Stop"),
+                    icon: "stop.fill",
+                    tint: nil,
+                    action: onStop
+                )
             }
             .frame(maxWidth: .infinity)
         }
-        .help("재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동")
+        .help(language.pick(
+            "재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동",
+            "Resume, or stop and go back to setup · drag to move"
+        ))
     }
 
     private func pausedButton(
@@ -195,6 +217,8 @@ struct GlassHUDView: View {
                 .font(.system(size: 8, weight: .bold))
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
         .frame(maxWidth: .infinity)

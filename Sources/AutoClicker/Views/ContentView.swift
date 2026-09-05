@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var model: AppModel
 
+    private var lang: AppLanguage { model.language }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -32,16 +34,25 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
         }
-        .alert("권한이 필요합니다", isPresented: $model.showAccessibilityAlert) {
-            Button("개인정보 보호 설정 열기") {
+        .alert(
+            lang.pick("권한이 필요합니다", "Accessibility permission required"),
+            isPresented: $model.showAccessibilityAlert
+        ) {
+            Button(lang.pick("개인정보 보호 설정 열기", "Open Privacy Settings")) {
                 AccessibilityService.openSystemSettings()
             }
-            Button("취소", role: .cancel) {}
+            Button(lang.pick("취소", "Cancel"), role: .cancel) {}
         } message: {
-            Text("""
-            시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용
-            목록에서 Auto Clicker를 켠 뒤 앱을 재실행하세요.
-            """)
+            Text(lang.pick(
+                """
+                시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용
+                목록에서 Auto Clicker를 켠 뒤 앱을 재실행하세요.
+                """,
+                """
+                System Settings → Privacy & Security → Accessibility
+                Turn on Auto Clicker in the list, then relaunch the app.
+                """
+            ))
         }
     }
 
@@ -55,13 +66,17 @@ struct ContentView: View {
                 .monospacedDigit()
                 .tracking(-1)
                 .foregroundStyle(Theme.ink)
-            Text("\(model.slides.count) slides  ·  \(model.advanceKey.title)")
+            Text(summaryLine(slides: model.slides.count, key: model.advanceKey))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.inkMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
         .glassSurface(cornerRadius: 22)
+    }
+
+    private func summaryLine(slides: Int, key: AdvanceKey) -> String {
+        lang.pick("슬라이드 \(slides)장  ·  \(key.title)", "\(slides) slides  ·  \(key.title)")
     }
 
     // MARK: - Preset / advance key
@@ -107,7 +122,9 @@ struct ContentView: View {
             HStack {
                 SectionLabel("PROFILES")
                 Spacer()
-                Button(model.showProfiles ? "접기" : "펼치기") {
+                Button(model.showProfiles
+                    ? lang.pick("접기", "Hide")
+                    : lang.pick("펼치기", "Show")) {
                     model.showProfiles.toggle()
                 }
                 .buttonStyle(.plain)
@@ -117,16 +134,19 @@ struct ContentView: View {
 
             if model.showProfiles {
                 HStack(spacing: 8) {
-                    TextField("프로필 이름", text: $model.profileNameDraft)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .glassSurface(cornerRadius: 14)
+                    TextField(
+                        lang.pick("프로필 이름", "Profile name"),
+                        text: $model.profileNameDraft
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassSurface(cornerRadius: 14)
 
                     QuietButton(
-                        title: "저장",
+                        title: lang.pick("저장", "Save"),
                         isEnabled: !model.profileNameDraft
                             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     ) {
@@ -135,7 +155,7 @@ struct ContentView: View {
                 }
 
                 if model.profiles.isEmpty {
-                    Text("저장된 프로필이 없습니다.")
+                    Text(lang.pick("저장된 프로필이 없습니다.", "No saved profiles yet."))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.inkMuted)
                 } else {
@@ -153,12 +173,12 @@ struct ContentView: View {
                 Text(profile.name)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.ink)
-                Text("\(profile.seconds.count) slides · \(profile.advanceKey.title)")
+                Text(summaryLine(slides: profile.seconds.count, key: profile.advanceKey))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.inkMuted)
             }
             Spacer()
-            QuietButton(title: "불러오기", isEnabled: model.canEdit) {
+            QuietButton(title: lang.pick("불러오기", "Load"), isEnabled: model.canEdit) {
                 model.loadProfile(profile)
             }
             Button {
@@ -182,15 +202,21 @@ struct ContentView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.accent)
-                Text("키 입력을 보내려면 권한이 필요합니다")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.ink)
+                Text(lang.pick(
+                    "키 입력을 보내려면 권한이 필요합니다",
+                    "Auto Clicker needs permission to send keystrokes"
+                ))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.ink)
             }
-            Text("시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용\n(왼쪽 ‘손쉬운 사용’ 메뉴가 아니라, 자물쇠·손 아이콘 쪽입니다)")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-            QuietButton(title: "개인정보 보호 설정 열기") {
+            Text(lang.pick(
+                "시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용\n(왼쪽 ‘손쉬운 사용’ 메뉴가 아니라, 자물쇠·손 아이콘 쪽입니다)",
+                "System Settings → Privacy & Security → Accessibility\n(not the Accessibility pane in the sidebar — the one behind the lock icon)"
+            ))
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            QuietButton(title: lang.pick("개인정보 보호 설정 열기", "Open Privacy Settings")) {
                 AccessibilityService.openSystemSettings()
             }
         }
@@ -212,22 +238,27 @@ struct ContentView: View {
 
     private var stickyStartBar: some View {
         VStack(spacing: 10) {
-            Text("시작하면 HUD가 뜹니다. 발표 앱을 앞으로 가져온 뒤 Play를 누르세요.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.inkMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(lang.pick(
+                "시작하면 HUD가 뜹니다. 발표 앱을 앞으로 가져온 뒤 Play를 누르세요.",
+                "Starting shows the HUD. Bring your slides to the front, then press Play."
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.inkMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             AccentButton(
-                title: "시작",
+                title: lang.pick("시작", "Start"),
                 isEnabled: !model.sequencer.isSessionOpen,
                 fillsWidth: true
             ) {
                 model.start()
             }
+
+            footerRow
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
-        .padding(.bottom, 18)
+        .padding(.bottom, 16)
         .background {
             Rectangle()
                 .fill(Theme.canvas.opacity(0.55))
@@ -237,6 +268,53 @@ struct ContentView: View {
                         .frame(height: 1)
                 }
                 .ignoresSafeArea()
+        }
+    }
+
+    private var footerRow: some View {
+        HStack(spacing: 10) {
+            teamHumanCredit
+            Spacer(minLength: 8)
+            languagePicker
+        }
+    }
+
+    private var teamHumanCredit: some View {
+        Link(destination: URL(string: "https://withteamhuman.com")!) {
+            HStack(spacing: 4) {
+                Text(lang.pick("만든 팀", "Made by"))
+                    .foregroundStyle(Theme.inkMuted)
+                Text("Team Human")
+                    .foregroundStyle(Theme.accent)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("withteamhuman.com")
+    }
+
+    private var languagePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(AppLanguage.allCases) { option in
+                let isSelected = model.language == option
+                Button(option.title) {
+                    model.setLanguage(option)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isSelected ? Theme.onAccent : Theme.ink)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .glassSurface(
+                    cornerRadius: 11,
+                    tint: isSelected ? Theme.accent : nil,
+                    interactive: true
+                )
+            }
         }
     }
 }

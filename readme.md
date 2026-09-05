@@ -1,5 +1,7 @@
 # Slide Auto Clicker
 
+[**Team Human**](https://withteamhuman.com)이 만들고 배포합니다. · Built and released by [**Team Human**](https://withteamhuman.com).
+
 페차쿠차 / 이그나이트용 macOS 슬라이드 자동 넘김 앱.
 
 슬라이드별 초를 설정한 뒤 **시작**하면 Glass HUD가 뜨고, 시간이 끝날 때마다 Space(또는 선택한 키)를 보냅니다. 발표자는 넘기는 타이밍을 신경 쓰지 않고 말하는 데만 집중하면 됩니다.
@@ -35,6 +37,8 @@ swift run
 4. 발표 앱(Keynote 등)을 앞으로 가져온 뒤 HUD의 **Play**를 눌러 카운트다운을 시작합니다.
 5. 실행 중에 HUD를 클릭하면 일시정지되고, **재개**와 **정지(메뉴로)**를 고를 수 있습니다.
 6. 단축키 — ⌘R 시작 대기 · ⌘P Play/일시정지·재개 · ⌘. 정지
+
+앱 화면 맨 아래에서 **한국어와 English를 전환**할 수 있습니다. 처음 실행할 때는 시스템 언어를 따르고, 한 번 고르면 그 선택을 기억합니다. 설정 창과 HUD가 함께 바뀝니다.
 
 ### HUD 위치 옮기기
 
@@ -78,6 +82,39 @@ macOS 26 미만에서는 Liquid Glass 대신 같은 모양의 재질(material)�
 - [ ] 시스템 설정을 라이트·다크로 바꿔가며 글자가 모두 읽히는지
 - [ ] 프로필 저장·불러오기
 
-## 라이선스
+## 만든 팀 — Team Human
 
-MIT. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
+이 앱은 [Team Human](https://withteamhuman.com)이 만들고 배포합니다.
+
+Team Human은 **좋은 기술이 공감과 창의성과 사람 사이의 진짜 연결에서 시작한다고 믿는 빌더 커뮤니티**입니다. 2025년 6월부터 해커톤과 밋업을 열어 왔습니다. 가장 최근인 2026년 6월 서울 AI 허브 해커톤에서는 빌더 166명이 하루에 AI 서비스 29개를 만들어 내놓았습니다.
+
+팀이 지키는 것은 넷입니다. 사용자가 아니라 **사람을 먼저 이해하고**(Empathy First), 이상해 보여도 **대담한 아이디어를 응원하며**(Creative Courage), 경쟁보다 **함께 자라고**(Community Over Competition), AI가 무엇이든 만들어 주는 시대일수록 **사람의 손을 거친 것을 귀하게 여깁니다**(Craft Matters).
+
+> **For product makers, by product makers**
+
+### About Team Human
+
+Team Human is a community of builders who believe the best tech starts with empathy, creativity, and real human connection. We have been running hackathons and meetups since June 2025 — most recently at Seoul AI Hub in June 2026, where 166 builders shipped 29 AI services in a single day.
+
+| | |
+|---|---|
+| 행사 · Events | 8 |
+| 하루 만에 제품을 낸 팀 · Teams that shipped in one day | 83 |
+| 현장 빌더 · Builders on site | 200+ |
+| 우승 15팀에 돌아간 Cursor 크레딧 · Cursor credits to 15 winning teams | $30,000 |
+
+**지난 행사 · Past events**
+
+- Hackathon vol.1 — 2026년 2월, 한국투자액셀러레이터
+- Eurekathon vol.2 — 2026년 4월, 강변 스파랜드
+- Hackathon vol.3 — 2026년 6월, 서울 AI 허브
+
+**연결되기 · Get in touch**
+
+- 홈페이지 · Website — <https://withteamhuman.com>
+- LinkedIn — <https://www.linkedin.com/company/113454183>
+- 카카오톡 오픈채팅 · KakaoTalk open chat — <https://open.kakao.com/o/pyheuCui>
+
+## 라이선스 · License
+
+MIT. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요. See [LICENSE](LICENSE) for details.

@@ -16,18 +16,22 @@ struct AutoClickerApp: App {
         .defaultSize(width: 440, height: 720)
         .windowResizability(.contentSize)
         .commands {
-            CommandMenu("Session") {
-                Button("시작 (Play 대기)") { model.start() }
+            CommandMenu(model.language.pick("세션", "Session")) {
+                Button(model.language.pick("시작 (Play 대기)", "Start (wait for Play)")) {
+                    model.start()
+                }
                     .keyboardShortcut("r", modifiers: [.command])
                     .disabled(model.sequencer.isSessionOpen)
 
-                Button("Play / 일시정지·재개") {
+                Button(model.language.pick("Play / 일시정지·재개", "Play / pause · resume")) {
                     model.togglePause()
                 }
                 .keyboardShortcut("p", modifiers: [.command])
                 .disabled(!model.sequencer.isSessionOpen)
 
-                Button("정지 (메뉴로)") { model.stop() }
+                Button(model.language.pick("정지 (메뉴로)", "Stop (back to setup)")) {
+                    model.stop()
+                }
                     .keyboardShortcut(".", modifiers: [.command])
                     .disabled(!model.sequencer.isSessionOpen && model.sequencer.phase != .finished)
             }
