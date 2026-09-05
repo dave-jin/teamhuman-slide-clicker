@@ -57,14 +57,28 @@ private extension NSColor {
 
 // MARK: - Liquid Glass
 
+/// How much of the backdrop the surface lets through.
+enum GlassVariant {
+    /// Standard frosted glass, for anything the eye needs to land on.
+    case regular
+    /// Barely-there glass, for the countdown that floats over a live slide.
+    case clear
+}
+
 extension View {
     /// Liquid Glass on macOS 26+, a material of the same shape everywhere else.
     func glassSurface(
         cornerRadius: CGFloat,
         tint: Color? = nil,
-        interactive: Bool = false
+        interactive: Bool = false,
+        variant: GlassVariant = .regular
     ) -> some View {
-        modifier(GlassSurface(cornerRadius: cornerRadius, tint: tint, interactive: interactive))
+        modifier(GlassSurface(
+            cornerRadius: cornerRadius,
+            tint: tint,
+            interactive: interactive,
+            variant: variant
+        ))
     }
 }
 
@@ -72,10 +86,11 @@ struct GlassSurface: ViewModifier {
     var cornerRadius: CGFloat
     var tint: Color?
     var interactive: Bool
+    var variant: GlassVariant = .regular
 
     /// Glass alone barely carries a hue, so a tinted surface also gets a brand
     /// fill layered over the glass. Without it the accent reads as plain gray.
-    private var fillOpacity: Double { 0.88 }
+    private var fillOpacity: Double { variant == .clear ? 0.35 : 0.88 }
 
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
@@ -91,10 +106,11 @@ struct GlassSurface: ViewModifier {
             content
                 .background {
                     let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    shape.fill(.regularMaterial)
+                    shape.fill(variant == .clear ? .ultraThinMaterial : .regularMaterial)
+                        .opacity(variant == .clear ? 0.62 : 1)
                     if let tint {
-                        shape.fill(tint.opacity(0.85))
-                    } else {
+                        shape.fill(tint.opacity(fillOpacity))
+                    } else if variant == .regular {
                         shape.fill(Theme.surface)
                     }
                     shape.strokeBorder(Theme.hairline, lineWidth: 1)
@@ -104,7 +120,7 @@ struct GlassSurface: ViewModifier {
 
     @available(macOS 26.0, *)
     private var glass: Glass {
-        var glass = Glass.regular
+        var glass = variant == .clear ? Glass.clear : Glass.regular
         if let tint {
             glass = glass.tint(tint)
         }

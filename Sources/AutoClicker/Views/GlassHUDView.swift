@@ -5,11 +5,13 @@ import SwiftUI
 /// Play, countdown and paused used to size themselves to their own content,
 /// so the HUD jumped and resized mid-talk. They now share a single card and
 /// only the contents change, which also lets the panel keep a constant frame.
+/// The card is deliberately small — it sits on top of a live slide, so it has
+/// to be readable at a glance without covering anything worth seeing.
 enum HUDMetrics {
-    static let cardSize = CGSize(width: 248, height: 132)
-    static let cornerRadius: CGFloat = 30
+    static let cardSize = CGSize(width: 136, height: 64)
+    static let cornerRadius: CGFloat = 18
     /// Breathing room inside the panel for the drop shadow.
-    static let shadowInset: CGFloat = 10
+    static let shadowInset: CGFloat = 8
 
     static var panelSize: CGSize {
         CGSize(
@@ -31,16 +33,32 @@ struct GlassHUDView: View {
     /// in which case the press must not be treated as a click.
     var onDragEnded: () -> Bool
 
-    private let controlRowHeight: CGFloat = 34
+    private let mainRowHeight: CGFloat = 30
+    private let controlRowHeight: CGFloat = 18
+
+    private var isRunning: Bool { sequencer.phase == .running }
 
     var body: some View {
         card
             .frame(width: HUDMetrics.cardSize.width, height: HUDMetrics.cardSize.height)
-            .glassSurface(
-                cornerRadius: HUDMetrics.cornerRadius,
-                tint: sequencer.phase == .armed ? Theme.accent : nil
-            )
-            .shadow(color: .black.opacity(0.22), radius: 12, x: 0, y: 6)
+            // The pane is drawn behind the contents rather than around them, so
+            // the countdown stays fully opaque while its glass fades back into
+            // the slide. Fading the whole card would dim the numbers too.
+            .background {
+                Color.clear
+                    .glassSurface(
+                        cornerRadius: HUDMetrics.cornerRadius,
+                        tint: sequencer.phase == .armed ? Theme.accent : nil,
+                        variant: isRunning ? .clear : .regular
+                    )
+                    .opacity(isRunning ? 0.55 : 1)
+                    .shadow(
+                        color: .black.opacity(isRunning ? 0.10 : 0.2),
+                        radius: isRunning ? 5 : 9,
+                        x: 0,
+                        y: 3
+                    )
+            }
             .padding(HUDMetrics.shadowInset)
             .contentShape(Rectangle())
             .gesture(pressGesture(action: primaryAction))
@@ -81,42 +99,44 @@ struct GlassHUDView: View {
             }
     }
 
-    /// Same internal margins in every state, so only the contents differ.
+    /// Same two rows in every state, so only the contents differ.
     private func cardShell<Top: View, Bottom: View>(
         @ViewBuilder top: () -> Top,
         @ViewBuilder bottom: () -> Bottom
     ) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             top()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, minHeight: mainRowHeight, maxHeight: .infinity)
             bottom()
                 .frame(height: controlRowHeight)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 11)
+        .padding(.top, 6)
+        .padding(.bottom, 7)
     }
 
     // MARK: - Armed (waiting for Play)
 
     private var armedCard: some View {
         cardShell {
-            HStack(spacing: 14) {
+            HStack(spacing: 6) {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 32, weight: .semibold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Play")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    Text(sequencer.progressLabel + " · " + sequencer.timeLabel)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .opacity(0.85)
-                }
+                    .font(.system(size: 15, weight: .bold))
+                Text("Play")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Spacer(minLength: 4)
+                Text(sequencer.progressLabel)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize()
+                    .opacity(0.85)
             }
         } bottom: {
-            Text("클릭하면 카운트다운 시작")
-                .font(.system(size: 11, weight: .medium))
+            Text("클릭하면 시작")
+                .font(.system(size: 10, weight: .medium))
                 .opacity(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(Theme.onAccent)
         .help("클릭: 카운트다운 시작 · 드래그: 위치 이동")
@@ -126,7 +146,7 @@ struct GlassHUDView: View {
 
     private var runningCard: some View {
         cardShell {
-            readout(accessory: nil)
+            readout
         } bottom: {
             progressBar
         }
@@ -138,28 +158,28 @@ struct GlassHUDView: View {
             let width = geo.size.width
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Theme.ink.opacity(0.12))
+                    .fill(Theme.ink.opacity(0.16))
                 Capsule()
                     .fill(sequencer.isUrgent ? Theme.urgent : Theme.accent)
                     .frame(width: max(0, width * sequencer.slideProgress))
             }
-            .frame(height: 5)
+            .frame(height: 4)
             .frame(maxHeight: .infinity)
             .animation(.linear(duration: 0.25), value: sequencer.slideProgress)
         }
-        .padding(.horizontal, 12)
     }
 
     // MARK: - Paused
 
     private var pausedCard: some View {
         cardShell {
-            readout(accessory: "pause.fill")
+            readout
         } bottom: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 pausedButton("재개", icon: "play.fill", tint: Theme.accent, action: onResume)
                 pausedButton("정지", icon: "stop.fill", tint: nil, action: onStop)
             }
+            .frame(maxWidth: .infinity)
         }
         .help("재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동")
     }
@@ -170,40 +190,44 @@ struct GlassHUDView: View {
         tint: Color?,
         action: @escaping () -> Void
     ) -> some View {
-        Label(title, systemImage: icon)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .glassSurface(cornerRadius: 15, tint: tint, interactive: true)
-            .contentShape(Capsule())
-            .gesture(pressGesture(action: action))
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 3)
+        .glassSurface(cornerRadius: 9, tint: tint, interactive: true)
+        .contentShape(Capsule())
+        .gesture(pressGesture(action: action))
     }
 
     // MARK: - Shared readout
 
     /// Countdown and slide position, identical in running and paused states so
-    /// nothing shifts when the talk is paused.
-    private func readout(accessory: String?) -> some View {
-        VStack(spacing: 1) {
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(sequencer.timeLabel)
-                    .font(.system(size: 44, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(sequencer.isUrgent ? Theme.urgent : Theme.ink)
-                    .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
+    /// nothing shifts when the talk is paused. No pause glyph here — the card
+    /// is only 136pt wide, and a 16:39 countdown next to "10 / 20" already
+    /// fills it; the resume/stop buttons say "paused" clearly enough.
+    private var readout: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(sequencer.timeLabel)
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(sequencer.isUrgent ? Theme.urgent : Theme.ink)
+                .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
 
-                if let accessory {
-                    Image(systemName: accessory)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.inkMuted)
-                }
-            }
+            Spacer(minLength: 4)
 
             Text(sequencer.progressLabel)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Theme.inkMuted)
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(Theme.ink.opacity(0.55))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scaleEffect(sequencer.isUrgent ? 1.03 : 1.0)
