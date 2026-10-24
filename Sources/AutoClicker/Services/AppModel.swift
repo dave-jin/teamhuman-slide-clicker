@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
 
     let sequencer = SequencerService()
     let hudController = GlassHUDPanelController()
+    let endOverlay = SessionEndOverlayController()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -25,6 +26,11 @@ final class AppModel: ObservableObject {
 
     var canEdit: Bool {
         !sequencer.isSessionOpen
+    }
+
+    /// Label used on the session-end card (preset name, or Custom).
+    var sessionPresetTitle: String {
+        selectedPreset?.title ?? language.pick("사용자 설정", "Custom")
     }
 
     init() {
@@ -39,7 +45,8 @@ final class AppModel: ObservableObject {
         hudController.onPlay = { [weak self] in self?.play() }
         hudController.onPause = { [weak self] in self?.sequencer.pause() }
         hudController.onResume = { [weak self] in self?.sequencer.resume() }
-        hudController.onStop = { [weak self] in self?.stop() }
+        hudController.onRestart = { [weak self] in self?.restartSession() }
+        hudController.onReset = { [weak self] in self?.resetToSetup() }
 
         sequencer.objectWillChange
             .sink { [weak self] _ in
@@ -93,6 +100,7 @@ final class AppModel: ObservableObject {
         self.language = language
         PersistenceService.saveLanguage(language)
         hudController.language = language
+        endOverlay.language = language
     }
 
     func setAdvanceKey(_ key: AdvanceKey) {
@@ -113,6 +121,7 @@ final class AppModel: ObservableObject {
 
         let timings = slides.map(\.seconds)
         persist()
+        endOverlay.hide()
         sequencer.arm(timings: timings, key: advanceKey)
         hideSetupWindow()
         hudController.show()
@@ -123,11 +132,31 @@ final class AppModel: ObservableObject {
         sequencer.play()
     }
 
-    /// Stop / return to setup menu.
-    func stop() {
+    /// Same sequence / key / preset — back to slide 1, Setup stays closed.
+    /// Lands in armed (Play) so the speaker can get ready again.
+    func restartSession() {
+        endOverlay.hide()
+        let timings = slides.map(\.seconds)
+        guard !timings.isEmpty else {
+            resetToSetup()
+            return
+        }
+        sequencer.arm(timings: timings, key: advanceKey)
+        hideSetupWindow()
+        hudController.show()
+    }
+
+    /// End the session and return to Setup. Prefs stay for editing.
+    func resetToSetup() {
+        endOverlay.hide()
         sequencer.stop()
         hudController.hide()
         showSetupWindow()
+    }
+
+    /// Alias used by menu / shortcuts that previously meant "stop".
+    func stop() {
+        resetToSetup()
     }
 
     func togglePause() {
@@ -174,10 +203,15 @@ final class AppModel: ObservableObject {
 
     private func handleFinished() {
         hudController.hide()
-        showSetupWindow()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.sequencer.stop()
-        }
+        // Setup stays closed until the user picks Reset (or Restart → HUD).
+        endOverlay.show(
+            slideCount: slides.count,
+            totalSeconds: totalSeconds,
+            presetTitle: sessionPresetTitle,
+            language: language,
+            onRestart: { [weak self] in self?.restartSession() },
+            onReset: { [weak self] in self?.resetToSetup() }
+        )
     }
 
     private func hideSetupWindow() {

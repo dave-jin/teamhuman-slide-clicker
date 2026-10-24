@@ -24,12 +24,12 @@ final class SequencerService: ObservableObject {
     private var runTask: Task<Void, Never>?
     private var pauseContinuation: CheckedContinuation<Void, Never>?
 
-    /// Setup locked while armed / running / paused.
+    /// Setup locked while a session is live — including the end-fade card.
     var isSessionOpen: Bool {
         switch phase {
-        case .armed, .running, .paused:
+        case .armed, .running, .paused, .finished:
             return true
-        case .idle, .finished:
+        case .idle:
             return false
         }
     }

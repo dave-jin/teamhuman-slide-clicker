@@ -53,4 +53,20 @@ enum TimeFormat {
         if m == 0 { return "0:\(String(format: "%02d", s))" }
         return "\(m):\(String(format: "%02d", s))"
     }
+
+    /// Spoken-style duration for the session-end summary card.
+    static func spokenDuration(_ seconds: Int, language: AppLanguage) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        switch language {
+        case .korean:
+            if m == 0 { return "\(s)초" }
+            if s == 0 { return "\(m)분" }
+            return "\(m)분 \(s)초"
+        case .english:
+            if m == 0 { return "\(s) sec" }
+            if s == 0 { return m == 1 ? "1 min" : "\(m) min" }
+            return "\(m) min \(s) sec"
+        }
+    }
 }

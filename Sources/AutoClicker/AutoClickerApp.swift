@@ -20,20 +20,25 @@ struct AutoClickerApp: App {
                 Button(model.language.pick("시작 (Play 대기)", "Start (wait for Play)")) {
                     model.start()
                 }
-                    .keyboardShortcut("r", modifiers: [.command])
-                    .disabled(model.sequencer.isSessionOpen)
+                .keyboardShortcut("r", modifiers: [.command])
+                .disabled(model.sequencer.isSessionOpen)
 
                 Button(model.language.pick("Play / 일시정지·재개", "Play / pause · resume")) {
                     model.togglePause()
                 }
                 .keyboardShortcut("p", modifiers: [.command])
+                .disabled(!model.sequencer.isSessionOpen || model.sequencer.phase == .finished)
+
+                Button(model.language.pick("다시 시작 (1장부터)", "Restart (from slide 1)")) {
+                    model.restartSession()
+                }
                 .disabled(!model.sequencer.isSessionOpen)
 
-                Button(model.language.pick("정지 (메뉴로)", "Stop (back to setup)")) {
-                    model.stop()
+                Button(model.language.pick("리셋 (설정으로)", "Reset (back to setup)")) {
+                    model.resetToSetup()
                 }
-                    .keyboardShortcut(".", modifiers: [.command])
-                    .disabled(!model.sequencer.isSessionOpen && model.sequencer.phase != .finished)
+                .keyboardShortcut(".", modifiers: [.command])
+                .disabled(!model.sequencer.isSessionOpen)
             }
         }
     }
@@ -52,12 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard event.modifierFlags.contains(.command) else { return false }
             let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
             if chars == "." {
-                if model.sequencer.isSessionOpen || model.sequencer.phase == .finished {
-                    model.stop()
+                if model.sequencer.isSessionOpen {
+                    model.resetToSetup()
                     return true
                 }
             }
-            if chars == "p", model.sequencer.isSessionOpen {
+            if chars == "p", model.sequencer.isSessionOpen, model.sequencer.phase != .finished {
                 model.togglePause()
                 return true
             }
@@ -80,11 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let globalKeyMonitor {
             NSEvent.removeMonitor(globalKeyMonitor)
         }
-        model?.stop()
+        model?.resetToSetup()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Keep running if HUD is up without setup window.
+        // Keep running while HUD or the session-end overlay is up without Setup.
         !(model?.sequencer.isSessionOpen ?? false)
     }
 }

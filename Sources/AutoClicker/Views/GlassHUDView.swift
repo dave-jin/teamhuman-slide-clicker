@@ -1,23 +1,30 @@
 import SwiftUI
 
-/// One footprint for every HUD state.
-///
-/// Play, countdown and paused used to size themselves to their own content,
-/// so the HUD jumped and resized mid-talk. They now share a single card and
-/// only the contents change, which also lets the panel keep a constant frame.
-/// The card is deliberately small — it sits on top of a live slide, so it has
-/// to be readable at a glance without covering anything worth seeing.
+/// HUD footprint: compact while running, a little taller when paused so
+/// Restart / Reset fit without covering the slide during countdown.
 enum HUDMetrics {
     static let cardSize = CGSize(width: 136, height: 64)
+    /// Paused expands vertically (mockup); width stays close so the HUD
+    /// does not jump sideways when the talk is paused.
+    static let pausedCardSize = CGSize(width: 148, height: 126)
     static let cornerRadius: CGFloat = 18
     /// Breathing room inside the panel for the drop shadow.
     static let shadowInset: CGFloat = 8
 
-    static var panelSize: CGSize {
-        CGSize(
-            width: cardSize.width + shadowInset * 2,
-            height: cardSize.height + shadowInset * 2
+    static func cardSize(for phase: SequencerPhase) -> CGSize {
+        phase == .paused ? pausedCardSize : cardSize
+    }
+
+    static func panelSize(for phase: SequencerPhase) -> CGSize {
+        let card = cardSize(for: phase)
+        return CGSize(
+            width: card.width + shadowInset * 2,
+            height: card.height + shadowInset * 2
         )
+    }
+
+    static var panelSize: CGSize {
+        panelSize(for: .running)
     }
 }
 
@@ -27,7 +34,8 @@ struct GlassHUDView: View {
     var onPlay: () -> Void
     var onPause: () -> Void
     var onResume: () -> Void
-    var onStop: () -> Void
+    var onRestart: () -> Void
+    var onReset: () -> Void
     /// Called on every mouse move while the pointer is down on the HUD.
     var onDragChanged: () -> Void
     /// Called on mouse up. Returns `true` if the HUD was actually moved,
@@ -38,10 +46,11 @@ struct GlassHUDView: View {
     private let controlRowHeight: CGFloat = 18
 
     private var isRunning: Bool { sequencer.phase == .running }
+    private var cardSize: CGSize { HUDMetrics.cardSize(for: sequencer.phase) }
 
     var body: some View {
         card
-            .frame(width: HUDMetrics.cardSize.width, height: HUDMetrics.cardSize.height)
+            .frame(width: cardSize.width, height: cardSize.height)
             // The pane is drawn behind the contents rather than around them, so
             // the countdown stays fully opaque while its glass fades back into
             // the slide. Fading the whole card would dim the numbers too.
@@ -63,6 +72,7 @@ struct GlassHUDView: View {
             .padding(HUDMetrics.shadowInset)
             .contentShape(Rectangle())
             .gesture(pressGesture(action: primaryAction))
+            .animation(.easeInOut(duration: 0.18), value: sequencer.phase)
     }
 
     @ViewBuilder
@@ -100,7 +110,7 @@ struct GlassHUDView: View {
             }
     }
 
-    /// Same two rows in every state, so only the contents differ.
+    /// Same two rows in armed / running, so only the contents differ.
     private func cardShell<Top: View, Bottom: View>(
         @ViewBuilder top: () -> Top,
         @ViewBuilder bottom: () -> Bottom
@@ -178,31 +188,44 @@ struct GlassHUDView: View {
         }
     }
 
-    // MARK: - Paused
+    // MARK: - Paused (expanded: resume / restart / reset)
 
     private var pausedCard: some View {
-        cardShell {
+        VStack(spacing: 6) {
             readout
-        } bottom: {
+                .frame(height: mainRowHeight)
+
+            progressBar
+                .frame(height: 4)
+
+            pausedButton(
+                language.pick("재개", "Resume"),
+                icon: "play.fill",
+                tint: Theme.accent,
+                action: onResume
+            )
+
             HStack(spacing: 6) {
                 pausedButton(
-                    language.pick("재개", "Resume"),
-                    icon: "play.fill",
-                    tint: Theme.accent,
-                    action: onResume
+                    language.pick("리셋", "Reset"),
+                    icon: "xmark",
+                    tint: nil,
+                    action: onReset
                 )
                 pausedButton(
-                    language.pick("정지", "Stop"),
-                    icon: "stop.fill",
+                    language.pick("다시 시작", "Restart"),
+                    icon: "arrow.counterclockwise",
                     tint: nil,
-                    action: onStop
+                    action: onRestart
                 )
             }
-            .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
         .help(language.pick(
-            "재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동",
-            "Resume, or stop and go back to setup · drag to move"
+            "재개 · 다시 시작(1장부터) · 리셋(설정으로) · 드래그: 이동",
+            "Resume · restart from slide 1 · reset to setup · drag to move"
         ))
     }
 
@@ -218,11 +241,11 @@ struct GlassHUDView: View {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.7)
         }
         .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .glassSurface(cornerRadius: 9, tint: tint, interactive: true)
         .contentShape(Capsule())
         .gesture(pressGesture(action: action))
@@ -231,9 +254,7 @@ struct GlassHUDView: View {
     // MARK: - Shared readout
 
     /// Countdown and slide position, identical in running and paused states so
-    /// nothing shifts when the talk is paused. No pause glyph here — the card
-    /// is only 136pt wide, and a 16:39 countdown next to "10 / 20" already
-    /// fills it; the resume/stop buttons say "paused" clearly enough.
+    /// nothing shifts when the talk is paused.
     private var readout: some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(sequencer.timeLabel)

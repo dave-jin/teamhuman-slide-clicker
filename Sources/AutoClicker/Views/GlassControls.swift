@@ -71,16 +71,18 @@ struct AccentButton: View {
 struct QuietButton: View {
     let title: String
     var isEnabled: Bool = true
+    var fillsWidth: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: fillsWidth ? 15 : 12, weight: .semibold))
                 .foregroundStyle(Theme.ink)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .glassSurface(cornerRadius: 14, interactive: true)
+                .padding(.horizontal, fillsWidth ? 20 : 12)
+                .padding(.vertical, fillsWidth ? 11 : 7)
+                .frame(maxWidth: fillsWidth ? .infinity : nil)
+                .glassSurface(cornerRadius: fillsWidth ? 18 : 14, interactive: true)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
