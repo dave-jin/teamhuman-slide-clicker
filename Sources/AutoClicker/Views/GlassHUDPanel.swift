@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -7,12 +8,16 @@ final class GlassHUDPanelController: NSObject {
     var onPlay: (() -> Void)?
     var onPause: (() -> Void)?
     var onResume: (() -> Void)?
-    var onStop: (() -> Void)?
+    var onRestart: (() -> Void)?
+    var onReset: (() -> Void)?
     /// Set by `AppModel`; the HUD lives outside the SwiftUI environment chain.
-    var language: AppLanguage = .korean
+    var language: AppLanguage = .korean {
+        didSet { updateContent() }
+    }
 
     private var panel: NSPanel?
     private var hosting: NSHostingView<GlassHUDView>?
+    private var phaseCancellable: AnyCancellable?
 
     /// Panel origin and pointer location captured when a press begins.
     private var dragAnchor: (origin: CGPoint, mouse: CGPoint)?
@@ -22,6 +27,12 @@ final class GlassHUDPanelController: NSObject {
 
     func attach(sequencer: SequencerService) {
         self.sequencer = sequencer
+        phaseCancellable = sequencer.$phase
+            .receive(on: RunLoop.main)
+            .sink { [weak self] phase in
+                self?.applySize(for: phase)
+                self?.updateContent()
+            }
     }
 
     func show() {
@@ -29,6 +40,7 @@ final class GlassHUDPanelController: NSObject {
         if panel == nil {
             panel = makePanel(sequencer: sequencer)
         }
+        applySize(for: sequencer.phase)
         updateContent()
         positionIfNeeded()
         panel?.orderFrontRegardless()
@@ -45,7 +57,8 @@ final class GlassHUDPanelController: NSObject {
             onPlay: { [weak self] in self?.onPlay?() },
             onPause: { [weak self] in self?.onPause?() },
             onResume: { [weak self] in self?.onResume?() },
-            onStop: { [weak self] in self?.onStop?() },
+            onRestart: { [weak self] in self?.onRestart?() },
+            onReset: { [weak self] in self?.onReset?() },
             onDragChanged: { [weak self] in self?.dragChanged() },
             onDragEnded: { [weak self] in self?.dragEnded() ?? false }
         )
@@ -57,17 +70,31 @@ final class GlassHUDPanelController: NSObject {
         if let hosting {
             hosting.rootView = view
         } else {
+            let size = HUDMetrics.panelSize(for: sequencer.phase)
             let host = NSHostingView(rootView: view)
-            host.frame = NSRect(origin: .zero, size: HUDMetrics.panelSize)
+            host.frame = NSRect(origin: .zero, size: size)
             panel.contentView = host
             hosting = host
         }
     }
 
+    private func applySize(for phase: SequencerPhase) {
+        guard let panel else { return }
+        let size = HUDMetrics.panelSize(for: phase)
+        var frame = panel.frame
+        // Grow/shrink from the top-right so the countdown corner stays put.
+        let oldSize = frame.size
+        frame.origin.x += oldSize.width - size.width
+        frame.origin.y += oldSize.height - size.height
+        frame.size = size
+        panel.setFrame(frame, display: true)
+        hosting?.frame = NSRect(origin: .zero, size: size)
+    }
+
     private func makePanel(sequencer: SequencerService) -> NSPanel {
-        // Every HUD state shares one card size, so the panel frame never changes.
+        let size = HUDMetrics.panelSize(for: sequencer.phase)
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: HUDMetrics.panelSize),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -88,7 +115,7 @@ final class GlassHUDPanelController: NSObject {
         panel.animationBehavior = .utilityWindow
 
         let host = NSHostingView(rootView: makeHUDView(sequencer: sequencer))
-        host.frame = NSRect(origin: .zero, size: HUDMetrics.panelSize)
+        host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
         hosting = host
 
@@ -96,8 +123,8 @@ final class GlassHUDPanelController: NSObject {
     }
 
     private func positionIfNeeded() {
-        guard let panel else { return }
-        let size = HUDMetrics.panelSize
+        guard let panel, let sequencer else { return }
+        let size = HUDMetrics.panelSize(for: sequencer.phase)
         if let saved = PersistenceService.loadHUDOrigin() {
             // A saved spot can land off-screen after a display change.
             panel.setFrameOrigin(clampedOrigin(saved, size: size))

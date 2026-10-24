@@ -73,6 +73,15 @@ struct ContentView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
         .glassSurface(cornerRadius: 22)
+        .overlay(alignment: .topTrailing) {
+            Text(lang.pick("최초 1회", "Setup once"))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Theme.ink.opacity(0.85), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .padding(12)
+        }
     }
 
     private func summaryLine(slides: Int, key: AdvanceKey) -> String {
@@ -238,14 +247,6 @@ struct ContentView: View {
 
     private var stickyStartBar: some View {
         VStack(spacing: 10) {
-            Text(lang.pick(
-                "시작하면 HUD가 뜹니다. 발표 앱을 앞으로 가져온 뒤 Play를 누르세요.",
-                "Starting shows the HUD. Bring your slides to the front, then press Play."
-            ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.inkMuted)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             AccentButton(
                 title: lang.pick("시작", "Start"),
                 isEnabled: !model.sequencer.isSessionOpen,
@@ -253,6 +254,15 @@ struct ContentView: View {
             ) {
                 model.start()
             }
+
+            Text(lang.pick(
+                "시작 후 이 창은 숨겨지고 미니 메뉴만 남습니다",
+                "After Start, this window hides — only the mini menu remains"
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.inkMuted)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
 
             footerRow
         }
