@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// Compact chip HUD: idle shows time + border progress; hover reveals controls.
+/// Compact chip HUD: idle shows time + thin progress bar; hover reveals controls.
 enum HUDMetrics {
-    /// Running idle — time only, tiny footprint.
-    static let idleCardSize = CGSize(width: 88, height: 40)
+    /// Running idle — time + bar, tiny footprint.
+    static let idleCardSize = CGSize(width: 88, height: 44)
     /// Hover / paused — Pause|Resume + Reset stacked under the time.
-    static let hoverCardSize = CGSize(width: 120, height: 96)
+    static let hoverCardSize = CGSize(width: 120, height: 102)
     /// Armed ready — Play + Settings.
     static let armedCardSize = CGSize(width: 120, height: 72)
     static let cornerRadius: CGFloat = 14
+    /// Thin track under the countdown.
+    static let progressBarHeight: CGFloat = 3
     /// Breathing room inside the panel for the drop shadow.
     static let shadowInset: CGFloat = 8
 
@@ -90,11 +92,6 @@ struct GlassHUDView: View {
                         y: 2
                     )
             }
-            .overlay {
-                if sequencer.phase == .running || sequencer.phase == .paused {
-                    borderProgress
-                }
-            }
             .padding(HUDMetrics.shadowInset)
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -139,18 +136,25 @@ struct GlassHUDView: View {
             }
     }
 
-    // MARK: - Border progress (replaces inner bar)
+    // MARK: - Horizontal progress (under the time)
 
-    private var borderProgress: some View {
-        let progress = max(0.001, min(1, sequencer.slideProgress))
-        let color = sequencer.isUrgent ? Theme.urgent : Theme.accent
-        return RoundedRectangle(cornerRadius: HUDMetrics.cornerRadius, style: .continuous)
-            .trim(from: 0, to: progress)
-            .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            .rotationEffect(.degrees(-90))
-            .padding(1)
-            .allowsHitTesting(false)
+    /// Simple filled capsule — avoids RoundedRectangle.trim stroke artifacts.
+    private var progressBar: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Theme.ink.opacity(0.14))
+                Capsule()
+                    .fill(sequencer.isUrgent ? Theme.urgent : Theme.accent)
+                    .frame(width: max(0, width * sequencer.slideProgress))
+            }
+            .frame(height: HUDMetrics.progressBarHeight)
+            .frame(maxHeight: .infinity, alignment: .center)
             .animation(.linear(duration: 0.25), value: sequencer.slideProgress)
+        }
+        .frame(height: HUDMetrics.progressBarHeight)
+        .allowsHitTesting(false)
     }
 
     // MARK: - Armed (ready chip)
@@ -185,12 +189,14 @@ struct GlassHUDView: View {
         ))
     }
 
-    // MARK: - Running (idle = time only; hover = Pause + Reset)
+    // MARK: - Running (idle = time + bar; hover = Pause + Reset)
 
     private var runningCard: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: showControls ? 5 : 4) {
             timeOnly
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            progressBar
 
             if showControls {
                 chipButton(
@@ -208,7 +214,7 @@ struct GlassHUDView: View {
             }
         }
         .padding(.horizontal, showControls ? 10 : 8)
-        .padding(.vertical, showControls ? 8 : 6)
+        .padding(.vertical, showControls ? 8 : 5)
         .help(language.pick(
             "호버: 일시정지·리셋 · 클릭: 일시정지 · 드래그: 이동",
             "Hover: pause · reset · click to pause · drag to move"
@@ -221,6 +227,8 @@ struct GlassHUDView: View {
         VStack(spacing: 5) {
             timeOnly
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            progressBar
 
             chipButton(
                 language.pick("재개", "Resume"),
@@ -245,7 +253,7 @@ struct GlassHUDView: View {
 
     // MARK: - Shared pieces
 
-    /// Preferences: idle chip shows time only (no slide count, no inner bar).
+    /// Preferences: idle chip shows time + thin bar (no slide count).
     private var timeOnly: some View {
         Text(sequencer.timeLabel)
             .font(.system(size: showControls ? 22 : 20, weight: .semibold, design: .rounded))

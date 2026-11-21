@@ -28,9 +28,11 @@ final class GlassHUDPanelController: NSObject {
 
     func attach(sequencer: SequencerService) {
         self.sequencer = sequencer
-        phaseCancellable = sequencer.$phase
+        // Phase drives size; remainingSeconds refreshes the countdown + progress bar
+        // without relying solely on NSHostingView's ObservedObject invalidation.
+        phaseCancellable = Publishers.CombineLatest(sequencer.$phase, sequencer.$remainingSeconds)
             .receive(on: RunLoop.main)
-            .sink { [weak self] phase in
+            .sink { [weak self] phase, _ in
                 guard let self else { return }
                 if phase != .running {
                     self.isHovered = false
