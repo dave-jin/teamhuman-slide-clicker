@@ -43,6 +43,9 @@ struct AutoClickerApp: App {
     }
 }
 
+/// Own `AppModel` on the main actor so Swift 6 / CLT accepts `AppModel()` —
+/// stored property init must not run in a nonisolated `NSObject` context.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var localKeyMonitor: Any?
@@ -51,22 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
 
+        // NSEvent monitors are delivered on the main thread; assumeIsolated
+        // bridges the nonisolated monitor closure into @MainActor AppModel.
         let handler: (NSEvent) -> Bool = { [weak self] event in
-            guard let model = self?.model else { return false }
-            guard event.modifierFlags.contains(.command) else { return false }
-            let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            if chars == "." {
-                if model.sequencer.isSessionOpen {
-                    // Chip Reset semantics: back to armed ready chip.
-                    model.restartSession()
-                    return true
-                }
+            guard let self else { return false }
+            return MainActor.assumeIsolated {
+                self.handleCommandKey(event)
             }
-            if chars == "p", model.sequencer.isSessionOpen, model.sequencer.phase != .finished {
-                model.togglePause()
-                return true
-            }
-            return false
         }
 
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -76,6 +70,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             _ = handler(event)
         }
+    }
+
+    private func handleCommandKey(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.contains(.command) else { return false }
+        let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        if chars == "." {
+            if model.sequencer.isSessionOpen {
+                // Chip Reset semantics: back to armed ready chip.
+                model.restartSession()
+                return true
+            }
+        }
+        if chars == "p", model.sequencer.isSessionOpen, model.sequencer.phase != .finished {
+            model.togglePause()
+            return true
+        }
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
