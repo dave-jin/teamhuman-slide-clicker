@@ -60,6 +60,7 @@ final class GlassHUDPanelController: NSObject {
         GlassHUDView(
             sequencer: sequencer,
             language: language,
+            isHovered: isHovered,
             onPlay: { [weak self] in self?.onPlay?() },
             onPause: { [weak self] in self?.onPause?() },
             onResume: { [weak self] in self?.onResume?() },

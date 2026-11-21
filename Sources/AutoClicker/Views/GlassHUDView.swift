@@ -42,6 +42,9 @@ enum HUDMetrics {
 struct GlassHUDView: View {
     @ObservedObject var sequencer: SequencerService
     var language: AppLanguage
+    /// Owned by `GlassHUDPanelController` (AppKit) — avoid `@State` so
+    /// `swift build` works with Command Line Tools (no SwiftUIMacros plugin).
+    var isHovered: Bool
     var onPlay: () -> Void
     var onPause: () -> Void
     var onResume: () -> Void
@@ -55,8 +58,6 @@ struct GlassHUDView: View {
     /// Called on mouse up. Returns `true` if the HUD was actually moved,
     /// in which case the press must not be treated as a click.
     var onDragEnded: () -> Bool
-
-    @State private var isHovered = false
 
     private var isRunning: Bool { sequencer.phase == .running }
     private var showControls: Bool {
@@ -97,7 +98,6 @@ struct GlassHUDView: View {
             .padding(HUDMetrics.shadowInset)
             .contentShape(Rectangle())
             .onHover { hovering in
-                isHovered = hovering
                 onHoverChanged(hovering)
             }
             .gesture(pressGesture(action: primaryAction))

@@ -3,19 +3,18 @@ import SwiftUI
 
 @main
 struct AutoClickerApp: App {
-    @StateObject private var model = AppModel()
+    /// Model lives on the AppKit delegate — avoid `@StateObject` (SwiftUIMacros)
+    /// so Command Line Tools can `swift build` without the Xcode macro plugin.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup("Auto Clicker") {
-            ContentView(model: model)
-                .onAppear {
-                    appDelegate.model = model
-                }
+            ContentView(model: appDelegate.model)
         }
         .defaultSize(width: 440, height: 720)
         .windowResizability(.contentSize)
         .commands {
+            let model = appDelegate.model
             CommandMenu(model.language.pick("세션", "Session")) {
                 Button(model.language.pick("시작 (Play 대기)", "Start (wait for Play)")) {
                     model.start()
@@ -45,7 +44,7 @@ struct AutoClickerApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    weak var model: AppModel?
+    let model = AppModel()
     private var localKeyMonitor: Any?
     private var globalKeyMonitor: Any?
 
@@ -86,11 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let globalKeyMonitor {
             NSEvent.removeMonitor(globalKeyMonitor)
         }
-        model?.openSetup()
+        model.openSetup()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Keep running while HUD or the session-end overlay is up without Setup.
-        !(model?.sequencer.isSessionOpen ?? false)
+        !model.sequencer.isSessionOpen
     }
 }

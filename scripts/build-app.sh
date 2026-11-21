@@ -30,6 +30,8 @@ EOF
 fi
 
 # --- Toolchain ----------------------------------------------------------------
+# Works with full Xcode OR Command Line Tools only (no SwiftUIMacros plugins).
+# Sources intentionally avoid @State / @StateObject so CLT `swift build` succeeds.
 if ! command -v swift >/dev/null 2>&1; then
   die "swift not found. Install Xcode or Command Line Tools:
   xcode-select --install"
@@ -37,6 +39,13 @@ fi
 
 if ! xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1; then
   die "macOS SDK missing. Open Xcode once or run: xcode-select --install"
+fi
+
+SDK_PATH="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+echo "Toolchain: $(swift --version 2>/dev/null | head -1 || echo swift)"
+echo "SDK: ${SDK_PATH:-unknown}"
+if [[ "$SDK_PATH" == *CommandLineTools* ]]; then
+  echo "Note: building with Command Line Tools (no full Xcode) — OK for this project."
 fi
 
 CONFIG="${1:-release}"
