@@ -256,8 +256,8 @@ struct ContentView: View {
             }
 
             Text(lang.pick(
-                "시작 후 이 창은 숨겨지고 미니 메뉴만 남습니다",
-                "After Start, this window hides — only the mini menu remains"
+                "시작 후 이 창은 숨겨지고 작은 칩만 남습니다 · 설정은 준비 칩에서",
+                "After Start, this window hides — only a small chip remains · Settings on the ready chip"
             ))
             .font(.system(size: 11))
             .foregroundStyle(Theme.inkMuted)

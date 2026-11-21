@@ -38,7 +38,7 @@ struct SessionEndCard: View {
                     action: onRestart
                 )
                 QuietButton(
-                    title: language.pick("리셋", "Reset"),
+                    title: language.pick("준비 칩", "Ready chip"),
                     fillsWidth: true,
                     action: onReset
                 )

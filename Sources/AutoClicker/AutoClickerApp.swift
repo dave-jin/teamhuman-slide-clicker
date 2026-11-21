@@ -29,15 +29,15 @@ struct AutoClickerApp: App {
                 .keyboardShortcut("p", modifiers: [.command])
                 .disabled(!model.sequencer.isSessionOpen || model.sequencer.phase == .finished)
 
-                Button(model.language.pick("다시 시작 (1장부터)", "Restart (from slide 1)")) {
+                Button(model.language.pick("리셋 (준비 칩)", "Reset (ready chip)")) {
                     model.restartSession()
                 }
+                .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!model.sequencer.isSessionOpen)
 
-                Button(model.language.pick("리셋 (설정으로)", "Reset (back to setup)")) {
-                    model.resetToSetup()
+                Button(model.language.pick("설정 (전체 Setup)", "Settings (full setup)")) {
+                    model.openSetup()
                 }
-                .keyboardShortcut(".", modifiers: [.command])
                 .disabled(!model.sequencer.isSessionOpen)
             }
         }
@@ -58,7 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
             if chars == "." {
                 if model.sequencer.isSessionOpen {
-                    model.resetToSetup()
+                    // Chip Reset semantics: back to armed ready chip.
+                    model.restartSession()
                     return true
                 }
             }
@@ -85,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let globalKeyMonitor {
             NSEvent.removeMonitor(globalKeyMonitor)
         }
-        model?.resetToSetup()
+        model?.openSetup()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

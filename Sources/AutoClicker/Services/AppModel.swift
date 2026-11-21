@@ -45,8 +45,9 @@ final class AppModel: ObservableObject {
         hudController.onPlay = { [weak self] in self?.play() }
         hudController.onPause = { [weak self] in self?.sequencer.pause() }
         hudController.onResume = { [weak self] in self?.sequencer.resume() }
-        hudController.onRestart = { [weak self] in self?.restartSession() }
-        hudController.onReset = { [weak self] in self?.resetToSetup() }
+        // Chip Reset → armed ready chip (not full Setup).
+        hudController.onReset = { [weak self] in self?.restartSession() }
+        hudController.onOpenSettings = { [weak self] in self?.openSetup() }
 
         sequencer.objectWillChange
             .sink { [weak self] _ in
@@ -146,17 +147,23 @@ final class AppModel: ObservableObject {
         hudController.show()
     }
 
-    /// End the session and return to Setup. Prefs stay for editing.
-    func resetToSetup() {
+    /// End the session and return to full Setup. Prefs stay for editing.
+    /// Only from armed chip 「설정」 / menu — not from chip Reset.
+    func openSetup() {
         endOverlay.hide()
         sequencer.stop()
         hudController.hide()
         showSetupWindow()
     }
 
+    /// Alias: full Setup (settings). Chip Reset uses `restartSession` instead.
+    func resetToSetup() {
+        openSetup()
+    }
+
     /// Alias used by menu / shortcuts that previously meant "stop".
     func stop() {
-        resetToSetup()
+        openSetup()
     }
 
     func togglePause() {
@@ -203,14 +210,15 @@ final class AppModel: ObservableObject {
 
     private func handleFinished() {
         hudController.hide()
-        // Setup stays closed until the user picks Reset (or Restart → HUD).
+        // End fade: Restart / Reset both land on the armed ready chip.
+        // Full Setup only via Settings on that chip.
         endOverlay.show(
             slideCount: slides.count,
             totalSeconds: totalSeconds,
             presetTitle: sessionPresetTitle,
             language: language,
             onRestart: { [weak self] in self?.restartSession() },
-            onReset: { [weak self] in self?.resetToSetup() }
+            onReset: { [weak self] in self?.restartSession() }
         )
     }
 
