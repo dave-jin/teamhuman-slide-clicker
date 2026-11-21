@@ -1,68 +1,105 @@
 import SwiftUI
 
-/// One footprint for every HUD state.
-///
-/// Play, countdown and paused used to size themselves to their own content,
-/// so the HUD jumped and resized mid-talk. They now share a single card and
-/// only the contents change, which also lets the panel keep a constant frame.
-/// The card is deliberately small — it sits on top of a live slide, so it has
-/// to be readable at a glance without covering anything worth seeing.
+/// Compact chip HUD: idle shows time + thin progress bar; hover reveals controls.
 enum HUDMetrics {
-    static let cardSize = CGSize(width: 136, height: 64)
-    static let cornerRadius: CGFloat = 18
+    /// Running idle — time + bar, tiny footprint.
+    static let idleCardSize = CGSize(width: 88, height: 44)
+    /// Hover / paused — Pause|Resume + Reset stacked under the time.
+    static let hoverCardSize = CGSize(width: 120, height: 102)
+    /// Armed ready — Play + Settings.
+    static let armedCardSize = CGSize(width: 120, height: 72)
+    static let cornerRadius: CGFloat = 14
+    /// Thin track under the countdown.
+    static let progressBarHeight: CGFloat = 3
     /// Breathing room inside the panel for the drop shadow.
     static let shadowInset: CGFloat = 8
 
-    static var panelSize: CGSize {
-        CGSize(
-            width: cardSize.width + shadowInset * 2,
-            height: cardSize.height + shadowInset * 2
+    static func cardSize(phase: SequencerPhase, hovered: Bool) -> CGSize {
+        switch phase {
+        case .armed:
+            return armedCardSize
+        case .running:
+            return hovered ? hoverCardSize : idleCardSize
+        case .paused:
+            return hoverCardSize
+        case .idle, .finished:
+            return idleCardSize
+        }
+    }
+
+    static func panelSize(phase: SequencerPhase, hovered: Bool) -> CGSize {
+        let card = cardSize(phase: phase, hovered: hovered)
+        return CGSize(
+            width: card.width + shadowInset * 2,
+            height: card.height + shadowInset * 2
         )
+    }
+
+    /// Default panel size before the first show.
+    static var panelSize: CGSize {
+        panelSize(phase: .running, hovered: false)
     }
 }
 
 struct GlassHUDView: View {
     @ObservedObject var sequencer: SequencerService
     var language: AppLanguage
+    /// Owned by `GlassHUDPanelController` (AppKit) — avoid `@State` so
+    /// `swift build` works with Command Line Tools (no SwiftUIMacros plugin).
+    var isHovered: Bool
     var onPlay: () -> Void
     var onPause: () -> Void
     var onResume: () -> Void
-    var onStop: () -> Void
+    var onReset: () -> Void
+    /// Armed chip → full Setup window.
+    var onOpenSettings: () -> Void
+    /// Hover enter/leave — panel resizes around the chip.
+    var onHoverChanged: (Bool) -> Void
     /// Called on every mouse move while the pointer is down on the HUD.
     var onDragChanged: () -> Void
     /// Called on mouse up. Returns `true` if the HUD was actually moved,
     /// in which case the press must not be treated as a click.
     var onDragEnded: () -> Bool
 
-    private let mainRowHeight: CGFloat = 30
-    private let controlRowHeight: CGFloat = 18
-
     private var isRunning: Bool { sequencer.phase == .running }
+    private var showControls: Bool {
+        switch sequencer.phase {
+        case .running: return isHovered
+        case .paused, .armed: return true
+        case .idle, .finished: return false
+        }
+    }
+
+    private var cardSize: CGSize {
+        HUDMetrics.cardSize(phase: sequencer.phase, hovered: isHovered)
+    }
 
     var body: some View {
         card
-            .frame(width: HUDMetrics.cardSize.width, height: HUDMetrics.cardSize.height)
-            // The pane is drawn behind the contents rather than around them, so
-            // the countdown stays fully opaque while its glass fades back into
-            // the slide. Fading the whole card would dim the numbers too.
+            .frame(width: cardSize.width, height: cardSize.height)
             .background {
                 Color.clear
                     .glassSurface(
                         cornerRadius: HUDMetrics.cornerRadius,
                         tint: sequencer.phase == .armed ? Theme.accent : nil,
-                        variant: isRunning ? .clear : .regular
+                        variant: isRunning && !isHovered ? .clear : .regular
                     )
-                    .opacity(isRunning ? 0.55 : 1)
+                    .opacity(isRunning && !isHovered ? 0.42 : 1)
                     .shadow(
-                        color: .black.opacity(isRunning ? 0.10 : 0.2),
-                        radius: isRunning ? 5 : 9,
+                        color: .black.opacity(isRunning && !isHovered ? 0.08 : 0.2),
+                        radius: isRunning && !isHovered ? 4 : 8,
                         x: 0,
-                        y: 3
+                        y: 2
                     )
             }
             .padding(HUDMetrics.shadowInset)
             .contentShape(Rectangle())
+            .onHover { hovering in
+                onHoverChanged(hovering)
+            }
             .gesture(pressGesture(action: primaryAction))
+            .animation(.easeInOut(duration: 0.16), value: showControls)
+            .animation(.easeInOut(duration: 0.16), value: sequencer.phase)
     }
 
     @ViewBuilder
@@ -79,18 +116,17 @@ struct GlassHUDView: View {
         }
     }
 
-    /// Clicking the card body does the obvious thing for the current state.
+    /// Body click only while running idle (no hover). Armed Play and
+    /// hover/paused controls use their own button gestures.
     private var primaryAction: (() -> Void)? {
         switch sequencer.phase {
-        case .armed: return onPlay
-        case .running: return onPause
-        case .paused, .idle, .finished: return nil
+        case .running: return showControls ? nil : onPause
+        case .armed, .paused, .idle, .finished: return nil
         }
     }
 
     // MARK: - Click vs. drag
 
-    /// A press that stays put is a click; a press that travels moves the HUD.
     private func pressGesture(action: (() -> Void)?) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { _ in onDragChanged() }
@@ -100,116 +136,147 @@ struct GlassHUDView: View {
             }
     }
 
-    /// Same two rows in every state, so only the contents differ.
-    private func cardShell<Top: View, Bottom: View>(
-        @ViewBuilder top: () -> Top,
-        @ViewBuilder bottom: () -> Bottom
-    ) -> some View {
-        VStack(spacing: 3) {
-            top()
-                .frame(maxWidth: .infinity, minHeight: mainRowHeight, maxHeight: .infinity)
-            bottom()
-                .frame(height: controlRowHeight)
-        }
-        .padding(.horizontal, 11)
-        .padding(.top, 6)
-        .padding(.bottom, 7)
-    }
+    // MARK: - Horizontal progress (under the time)
 
-    // MARK: - Armed (waiting for Play)
-
-    private var armedCard: some View {
-        cardShell {
-            HStack(spacing: 6) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 15, weight: .bold))
-                Text("Play")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                Spacer(minLength: 4)
-                Text(sequencer.progressLabel)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .fixedSize()
-                    .opacity(0.85)
-            }
-        } bottom: {
-            Text(language.pick("클릭하면 시작", "Click to start"))
-                .font(.system(size: 10, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .opacity(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .foregroundStyle(Theme.onAccent)
-        .help(language.pick(
-            "클릭: 카운트다운 시작 · 드래그: 위치 이동",
-            "Click to start the countdown · drag to move"
-        ))
-    }
-
-    // MARK: - Running
-
-    private var runningCard: some View {
-        cardShell {
-            readout
-        } bottom: {
-            progressBar
-        }
-        .help(language.pick(
-            "클릭: 일시정지 · 드래그: 위치 이동",
-            "Click to pause · drag to move"
-        ))
-    }
-
+    /// Simple filled capsule — avoids RoundedRectangle.trim stroke artifacts.
     private var progressBar: some View {
         GeometryReader { geo in
             let width = geo.size.width
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Theme.ink.opacity(0.16))
+                    .fill(Theme.ink.opacity(0.14))
                 Capsule()
                     .fill(sequencer.isUrgent ? Theme.urgent : Theme.accent)
                     .frame(width: max(0, width * sequencer.slideProgress))
             }
-            .frame(height: 4)
-            .frame(maxHeight: .infinity)
+            .frame(height: HUDMetrics.progressBarHeight)
+            .frame(maxHeight: .infinity, alignment: .center)
             .animation(.linear(duration: 0.25), value: sequencer.slideProgress)
         }
+        .frame(height: HUDMetrics.progressBarHeight)
+        .allowsHitTesting(false)
     }
 
-    // MARK: - Paused
+    // MARK: - Armed (ready chip)
 
-    private var pausedCard: some View {
-        cardShell {
-            readout
-        } bottom: {
-            HStack(spacing: 6) {
-                pausedButton(
-                    language.pick("재개", "Resume"),
-                    icon: "play.fill",
-                    tint: Theme.accent,
-                    action: onResume
-                )
-                pausedButton(
-                    language.pick("정지", "Stop"),
-                    icon: "stop.fill",
-                    tint: nil,
-                    action: onStop
-                )
+    private var armedCard: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .bold))
+                Text("Play")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity)
+            .foregroundStyle(Theme.onAccent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(pressGesture(action: onPlay))
+
+            chipButton(
+                language.pick("설정", "Settings"),
+                icon: "gearshape",
+                accent: false,
+                onAccentSurface: true,
+                action: onOpenSettings
+            )
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .help(language.pick(
-            "재개하거나 메뉴로 돌아갑니다 · 드래그: 위치 이동",
-            "Resume, or stop and go back to setup · drag to move"
+            "클릭: 시작 · 설정: 전체 Setup · 드래그: 이동",
+            "Click to start · Settings opens setup · drag to move"
         ))
     }
 
-    private func pausedButton(
+    // MARK: - Running (idle = time + bar; hover = Pause + Reset)
+
+    private var runningCard: some View {
+        VStack(spacing: showControls ? 5 : 4) {
+            timeOnly
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            progressBar
+
+            if showControls {
+                chipButton(
+                    language.pick("일시정지", "Pause"),
+                    icon: "pause.fill",
+                    accent: true,
+                    action: onPause
+                )
+                chipButton(
+                    language.pick("리셋", "Reset"),
+                    icon: "xmark",
+                    accent: false,
+                    action: onReset
+                )
+            }
+        }
+        .padding(.horizontal, showControls ? 10 : 8)
+        .padding(.vertical, showControls ? 8 : 5)
+        .help(language.pick(
+            "호버: 일시정지·리셋 · 클릭: 일시정지 · 드래그: 이동",
+            "Hover: pause · reset · click to pause · drag to move"
+        ))
+    }
+
+    // MARK: - Paused (Resume + Reset always visible)
+
+    private var pausedCard: some View {
+        VStack(spacing: 5) {
+            timeOnly
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            progressBar
+
+            chipButton(
+                language.pick("재개", "Resume"),
+                icon: "play.fill",
+                accent: true,
+                action: onResume
+            )
+            chipButton(
+                language.pick("리셋", "Reset"),
+                icon: "xmark",
+                accent: false,
+                action: onReset
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .help(language.pick(
+            "재개 · 리셋(준비 칩) · 드래그: 이동",
+            "Resume · reset to ready chip · drag to move"
+        ))
+    }
+
+    // MARK: - Shared pieces
+
+    /// Preferences: idle chip shows time + thin bar (no slide count).
+    private var timeOnly: some View {
+        Text(sequencer.timeLabel)
+            .font(.system(size: showControls ? 22 : 20, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .foregroundStyle(sequencer.isUrgent ? Theme.urgent : Theme.ink)
+            .frame(maxWidth: .infinity)
+            .scaleEffect(sequencer.isUrgent ? 1.04 : 1.0)
+            .animation(
+                sequencer.isUrgent
+                    ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
+                    : .default,
+                value: sequencer.isUrgent
+            )
+            .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
+    }
+
+    private func chipButton(
         _ title: String,
         icon: String,
-        tint: Color?,
+        accent: Bool,
+        onAccentSurface: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 3) {
@@ -218,48 +285,29 @@ struct GlassHUDView: View {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.7)
         }
-        .foregroundStyle(tint == nil ? Theme.ink : Theme.onAccent)
+        .foregroundStyle(buttonForeground(accent: accent, onAccentSurface: onAccentSurface))
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 3)
-        .glassSurface(cornerRadius: 9, tint: tint, interactive: true)
+        .padding(.vertical, 4)
+        .background {
+            if accent {
+                Capsule().fill(Theme.accent)
+            } else if onAccentSurface {
+                Capsule().fill(Color.white.opacity(0.22))
+            } else {
+                Capsule()
+                    .fill(Color.clear)
+                    .glassSurface(cornerRadius: 9, interactive: true)
+            }
+        }
         .contentShape(Capsule())
         .gesture(pressGesture(action: action))
     }
 
-    // MARK: - Shared readout
-
-    /// Countdown and slide position, identical in running and paused states so
-    /// nothing shifts when the talk is paused. No pause glyph here — the card
-    /// is only 136pt wide, and a 16:39 countdown next to "10 / 20" already
-    /// fills it; the resume/stop buttons say "paused" clearly enough.
-    private var readout: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(sequencer.timeLabel)
-                .font(.system(size: 26, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(sequencer.isUrgent ? Theme.urgent : Theme.ink)
-                .animation(.easeInOut(duration: 0.15), value: sequencer.remainingSeconds)
-
-            Spacer(minLength: 4)
-
-            Text(sequencer.progressLabel)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundStyle(Theme.ink.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .scaleEffect(sequencer.isUrgent ? 1.03 : 1.0)
-        .animation(
-            sequencer.isUrgent
-                ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
-                : .default,
-            value: sequencer.isUrgent
-        )
+    private func buttonForeground(accent: Bool, onAccentSurface: Bool) -> Color {
+        if accent { return Theme.onAccent }
+        if onAccentSurface { return Theme.onAccent.opacity(0.95) }
+        return Theme.ink
     }
 }
